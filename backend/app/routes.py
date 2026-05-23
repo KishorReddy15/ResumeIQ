@@ -1,11 +1,19 @@
+import logging
+
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+
+logger = logging.getLogger(__name__)
 
 from .database import get_connection
 from .models import (
     CandidateOut, ExperienceItem, EducationItem, TagUpdate, UploadResponse,
     ChatRequest, ChatResponse,
+    NLSearchRequest, NLSearchResponse, NLCandidateResult,
 )
-from .services import extract_text_from_pdf, extract_resume_data, validate_pdf, chat_with_resumes
+from .services import (
+    extract_text_from_pdf, extract_resume_data, validate_pdf, chat_with_resumes,
+    generate_sql_from_query, validate_generated_sql, explain_candidates,
+)
 
 router = APIRouter()
 
@@ -232,3 +240,72 @@ def chat(body: ChatRequest):
     messages = [{"role": m.role, "content": m.content} for m in body.messages]
     reply = chat_with_resumes(body.resume_texts, messages)
     return ChatResponse(reply=reply)
+
+
+@router.post("/search/natural", response_model=NLSearchResponse)
+def natural_language_search(body: NLSearchRequest):
+    if not body.query.strip():
+        raise HTTPException(status_code=400, detail="Query cannot be empty.")
+
+    try:
+        sql = generate_sql_from_query(body.query)
+    except ValueError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Groq SQL generation failed")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to generate SQL from your query. Please try rephrasing.",
+        )
+
+    error = validate_generated_sql(sql)
+    if error:
+        logger.warning("Unsafe SQL rejected: %s — %s", sql, error)
+        raise HTTPException(status_code=400, detail=error)
+
+    conn = get_connection()
+    try:
+        rows = conn.execute(sql).fetchall()
+    except Exception:
+        conn.close()
+        logger.exception("AI-generated SQL execution failed: %s", sql)
+        raise HTTPException(
+            status_code=400,
+            detail="The AI-generated query could not be executed. Please try rephrasing your search.",
+        )
+
+    candidates = [_build_candidate(row) for row in rows]
+    conn.close()
+
+    if not candidates:
+        return NLSearchResponse(query=body.query, sql=sql, results=[])
+
+    candidates_info = [
+        {
+            "id": c.id,
+            "name": c.name,
+            "skills": c.skills,
+            "experience": [
+                {"title": e.title, "company": e.company, "duration": e.duration}
+                for e in c.experience
+            ],
+            "source": c.source,
+        }
+        for c in candidates
+    ]
+
+    try:
+        explanations = explain_candidates(body.query, candidates_info)
+    except Exception:
+        logger.exception("Groq explanation generation failed")
+        explanations = {}
+
+    results = [
+        NLCandidateResult(
+            candidate=c,
+            explanation=explanations.get(str(c.id), "Matched the search criteria."),
+        )
+        for c in candidates
+    ]
+
+    return NLSearchResponse(query=body.query, sql=sql, results=results)

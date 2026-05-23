@@ -133,3 +133,135 @@ def validate_pdf(filename: str, size: int) -> str | None:
     if size > MAX_FILE_SIZE:
         return f"File too large. Maximum size is {MAX_FILE_SIZE // (1024 * 1024)} MB."
     return None
+
+
+DB_SCHEMA_FOR_LLM = """
+Tables:
+1. candidates (id INTEGER PK, name TEXT, email TEXT, phone TEXT, source TEXT, filename TEXT, raw_text TEXT, created_at TIMESTAMP)
+2. skills (id INTEGER PK, candidate_id INTEGER FK→candidates.id, skill TEXT)
+3. experience (id INTEGER PK, candidate_id INTEGER FK→candidates.id, title TEXT, company TEXT, duration TEXT, description TEXT)
+4. education (id INTEGER PK, candidate_id INTEGER FK→candidates.id, degree TEXT, institution TEXT, year TEXT)
+5. tags (id INTEGER PK, candidate_id INTEGER FK→candidates.id, tag TEXT)
+
+Relationships: All child tables reference candidates.id via candidate_id.
+source values: 'Direct Apply', 'LinkedIn', 'Referral', 'Other'.
+"""
+
+SQL_GENERATION_PROMPT = """You are an expert SQL assistant. Convert the user's natural language request into a valid SQLite SELECT query based on this database schema:
+
+{schema}
+
+Rules:
+- Return ONLY the raw SQL query, nothing else. No markdown, no explanation, no code fences.
+- The query MUST be a SELECT statement. Never generate INSERT, UPDATE, DELETE, DROP, ALTER, or any other modifying statement.
+- Always return candidate rows by selecting from the candidates table (alias as c).
+- Use JOINs or subqueries with skills, experience, education, and tags tables as needed.
+- Always include "SELECT DISTINCT c.*" to avoid duplicate rows from JOINs.
+- For skill/tag matching, use case-insensitive LIKE comparisons.
+- For experience duration matching, extract numeric values where possible using CAST or pattern matching.
+- Order results by c.created_at DESC unless the user specifies otherwise.
+"""
+
+EXPLANATION_PROMPT = """You are a recruiting assistant. The user searched for: "{query}"
+
+Below are the matching candidate profiles. For each candidate, write a brief 1-2 sentence explanation of why they match the search query. Be specific — reference their actual skills, experience, or qualifications.
+
+Return ONLY a JSON object mapping candidate IDs to explanation strings, like:
+{{"1": "Matches because...", "2": "Matches because..."}}
+
+No markdown, no code fences, just the JSON object.
+
+Candidates:
+{candidates}
+"""
+
+
+FORBIDDEN_SQL_KEYWORDS = [
+    "INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE",
+    "TRUNCATE", "REPLACE", "ATTACH", "DETACH", "PRAGMA",
+]
+
+
+def validate_generated_sql(sql: str) -> str | None:
+    normalized = sql.strip().upper()
+    if not normalized.startswith("SELECT"):
+        return "Generated query is not a SELECT statement."
+    for keyword in FORBIDDEN_SQL_KEYWORDS:
+        if keyword in normalized:
+            return f"Generated query contains forbidden keyword: {keyword}"
+    return None
+
+
+def generate_sql_from_query(user_query: str) -> str:
+    api_key = os.environ.get("GROQ_API_KEY", "")
+    if not api_key:
+        raise ValueError("GROQ_API_KEY is not configured.")
+
+    client = Groq(api_key=api_key)
+    response = client.chat.completions.create(
+        model="llama-3.1-8b-instant",
+        messages=[
+            {
+                "role": "system",
+                "content": SQL_GENERATION_PROMPT.format(schema=DB_SCHEMA_FOR_LLM),
+            },
+            {"role": "user", "content": user_query},
+        ],
+        temperature=0,
+        max_tokens=1024,
+    )
+
+    sql = response.choices[0].message.content.strip()
+
+    if sql.startswith("```"):
+        lines = sql.split("\n")
+        lines = [l for l in lines if not l.strip().startswith("```")]
+        sql = "\n".join(lines).strip()
+
+    return sql
+
+
+def explain_candidates(user_query: str, candidates_info: list[dict]) -> dict[str, str]:
+    api_key = os.environ.get("GROQ_API_KEY", "")
+    if not api_key:
+        return {}
+
+    candidates_text = ""
+    for c in candidates_info:
+        candidates_text += (
+            f"ID {c['id']}: {c['name'] or 'Unknown'} — "
+            f"Skills: {', '.join(c.get('skills', []))}; "
+            f"Experience: {', '.join(e.get('title', '') + ' at ' + e.get('company', '') for e in c.get('experience', []))}; "
+            f"Source: {c.get('source', 'N/A')}\n"
+        )
+
+    client = Groq(api_key=api_key)
+    response = client.chat.completions.create(
+        model="llama-3.1-8b-instant",
+        messages=[
+            {
+                "role": "system",
+                "content": "You are a precise JSON generator. Return only valid JSON.",
+            },
+            {
+                "role": "user",
+                "content": EXPLANATION_PROMPT.format(
+                    query=user_query, candidates=candidates_text
+                ),
+            },
+        ],
+        temperature=0.2,
+        max_tokens=2048,
+    )
+
+    content = response.choices[0].message.content.strip()
+    if content.startswith("```"):
+        lines = content.split("\n")
+        lines = [l for l in lines if not l.strip().startswith("```")]
+        content = "\n".join(lines).strip()
+
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        logger.warning("Failed to parse explanation JSON: %s", content)
+        return {}
