@@ -74,3 +74,36 @@ class NLSearchResponse(BaseModel):
     query: str
     sql: str
     results: list[NLCandidateResult]
+
+
+class CompareRequest(BaseModel):
+    candidate_ids: list[int]
+
+
+class ComparisonField(BaseModel):
+    label: str
+    values: dict[str, str | list[str] | None]
+
+
+class CompareResponse(BaseModel):
+    candidates: list[CandidateOut]
+    comparison: list[ComparisonField]
+    ai_summary: str
+
+
+class ScoreRequest(BaseModel):
+    job_description: str
+    candidate_ids: list[int] = []
+
+
+class CandidateScore(BaseModel):
+    candidate: CandidateOut
+    score: int
+    reasoning: str
+    strengths: list[str]
+    gaps: list[str]
+
+
+class ScoreResponse(BaseModel):
+    job_description: str
+    results: list[CandidateScore]

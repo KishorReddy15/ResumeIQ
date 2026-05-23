@@ -265,3 +265,141 @@ def explain_candidates(user_query: str, candidates_info: list[dict]) -> dict[str
     except json.JSONDecodeError:
         logger.warning("Failed to parse explanation JSON: %s", content)
         return {}
+
+
+COMPARE_PROMPT = """You are a recruiting analyst. Compare these candidates side-by-side and provide a concise AI summary highlighting key differences and relative strengths.
+
+Candidates:
+{candidates}
+
+Return ONLY a JSON object with this structure:
+{{"summary": "2-4 sentence comparison highlighting key differences and who stands out for what"}}
+
+No markdown, no code fences, just the JSON object."""
+
+
+def compare_candidates(candidates_info: list[dict]) -> str:
+    api_key = os.environ.get("GROQ_API_KEY", "")
+    if not api_key:
+        return "GROQ_API_KEY not configured. Cannot generate AI comparison."
+
+    candidates_text = ""
+    for c in candidates_info:
+        exp_text = "; ".join(
+            f"{e.get('title', '')} at {e.get('company', '')} ({e.get('duration', '')})"
+            for e in c.get("experience", [])
+        )
+        edu_text = "; ".join(
+            f"{e.get('degree', '')} from {e.get('institution', '')}"
+            for e in c.get("education", [])
+        )
+        candidates_text += (
+            f"- {c['name'] or 'Unknown'}: "
+            f"Skills: {', '.join(c.get('skills', []))}; "
+            f"Experience: {exp_text}; "
+            f"Education: {edu_text}; "
+            f"Source: {c.get('source', 'N/A')}\n"
+        )
+
+    client = Groq(api_key=api_key)
+    response = client.chat.completions.create(
+        model="llama-3.1-8b-instant",
+        messages=[
+            {
+                "role": "system",
+                "content": "You are a precise JSON generator. Return only valid JSON.",
+            },
+            {
+                "role": "user",
+                "content": COMPARE_PROMPT.format(candidates=candidates_text),
+            },
+        ],
+        temperature=0.2,
+        max_tokens=1024,
+    )
+
+    content = response.choices[0].message.content.strip()
+    if content.startswith("```"):
+        lines = content.split("\n")
+        lines = [l for l in lines if not l.strip().startswith("```")]
+        content = "\n".join(lines).strip()
+
+    try:
+        data = json.loads(content)
+        return data.get("summary", content)
+    except json.JSONDecodeError:
+        return content
+
+
+SCORING_PROMPT = """You are an expert recruiter. Score each candidate against the following job description on a scale of 0-100.
+
+Job Description:
+{job_description}
+
+Candidates:
+{candidates}
+
+For each candidate, return:
+- score: 0-100 integer (how well they match)
+- reasoning: 1-2 sentence explanation of the score
+- strengths: list of 2-4 relevant strengths for this role
+- gaps: list of 1-3 areas where they fall short
+
+Return ONLY a JSON object mapping candidate IDs to their assessment:
+{{"1": {{"score": 85, "reasoning": "...", "strengths": ["...", "..."], "gaps": ["..."]}}, "2": {{...}}}}
+
+No markdown, no code fences, just the JSON object."""
+
+
+def score_candidates(job_description: str, candidates_info: list[dict]) -> dict:
+    api_key = os.environ.get("GROQ_API_KEY", "")
+    if not api_key:
+        return {}
+
+    candidates_text = ""
+    for c in candidates_info:
+        exp_text = "; ".join(
+            f"{e.get('title', '')} at {e.get('company', '')} ({e.get('duration', '')})"
+            for e in c.get("experience", [])
+        )
+        edu_text = "; ".join(
+            f"{e.get('degree', '')} from {e.get('institution', '')}"
+            for e in c.get("education", [])
+        )
+        candidates_text += (
+            f"ID {c['id']}: {c['name'] or 'Unknown'} — "
+            f"Skills: {', '.join(c.get('skills', []))}; "
+            f"Experience: {exp_text}; "
+            f"Education: {edu_text}\n"
+        )
+
+    client = Groq(api_key=api_key)
+    response = client.chat.completions.create(
+        model="llama-3.1-8b-instant",
+        messages=[
+            {
+                "role": "system",
+                "content": "You are a precise JSON generator. Return only valid JSON.",
+            },
+            {
+                "role": "user",
+                "content": SCORING_PROMPT.format(
+                    job_description=job_description, candidates=candidates_text
+                ),
+            },
+        ],
+        temperature=0.1,
+        max_tokens=2048,
+    )
+
+    content = response.choices[0].message.content.strip()
+    if content.startswith("```"):
+        lines = content.split("\n")
+        lines = [l for l in lines if not l.strip().startswith("```")]
+        content = "\n".join(lines).strip()
+
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        logger.warning("Failed to parse scoring JSON: %s", content)
+        return {}

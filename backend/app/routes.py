@@ -9,10 +9,13 @@ from .models import (
     CandidateOut, ExperienceItem, EducationItem, TagUpdate, UploadResponse,
     ChatRequest, ChatResponse,
     NLSearchRequest, NLSearchResponse, NLCandidateResult,
+    CompareRequest, CompareResponse, ComparisonField,
+    ScoreRequest, ScoreResponse, CandidateScore,
 )
 from .services import (
     extract_text_from_pdf, extract_resume_data, validate_pdf, chat_with_resumes,
     generate_sql_from_query, validate_generated_sql, explain_candidates,
+    compare_candidates, score_candidates,
 )
 
 router = APIRouter()
@@ -309,3 +312,140 @@ def natural_language_search(body: NLSearchRequest):
     ]
 
     return NLSearchResponse(query=body.query, sql=sql, results=results)
+
+
+def _candidate_info(c: CandidateOut) -> dict:
+    return {
+        "id": c.id,
+        "name": c.name,
+        "skills": c.skills,
+        "experience": [
+            {"title": e.title, "company": e.company, "duration": e.duration}
+            for e in c.experience
+        ],
+        "education": [
+            {"degree": e.degree, "institution": e.institution, "year": e.year}
+            for e in c.education
+        ],
+        "source": c.source,
+    }
+
+
+@router.post("/candidates/compare", response_model=CompareResponse)
+def compare(body: CompareRequest):
+    if len(body.candidate_ids) < 2:
+        raise HTTPException(status_code=400, detail="Select at least 2 candidates to compare.")
+    if len(body.candidate_ids) > 4:
+        raise HTTPException(status_code=400, detail="Compare up to 4 candidates at a time.")
+
+    conn = get_connection()
+    candidates = []
+    for cid in body.candidate_ids:
+        row = conn.execute("SELECT * FROM candidates WHERE id = ?", (cid,)).fetchone()
+        if not row:
+            conn.close()
+            raise HTTPException(status_code=404, detail=f"Candidate {cid} not found.")
+        candidates.append(_build_candidate(row))
+    conn.close()
+
+    comparison = [
+        ComparisonField(
+            label="Name",
+            values={str(c.id): c.name or "Unknown" for c in candidates},
+        ),
+        ComparisonField(
+            label="Source",
+            values={str(c.id): c.source for c in candidates},
+        ),
+        ComparisonField(
+            label="Email",
+            values={str(c.id): c.email for c in candidates},
+        ),
+        ComparisonField(
+            label="Phone",
+            values={str(c.id): c.phone for c in candidates},
+        ),
+        ComparisonField(
+            label="Skills",
+            values={str(c.id): c.skills for c in candidates},
+        ),
+        ComparisonField(
+            label="Experience",
+            values={
+                str(c.id): [
+                    f"{e.title} at {e.company} ({e.duration})"
+                    for e in c.experience
+                ]
+                for c in candidates
+            },
+        ),
+        ComparisonField(
+            label="Education",
+            values={
+                str(c.id): [
+                    f"{e.degree} — {e.institution} ({e.year})"
+                    for e in c.education
+                ]
+                for c in candidates
+            },
+        ),
+    ]
+
+    candidates_info = [_candidate_info(c) for c in candidates]
+    try:
+        ai_summary = compare_candidates(candidates_info)
+    except Exception:
+        logger.exception("Comparison AI summary failed")
+        ai_summary = "Could not generate AI comparison summary."
+
+    return CompareResponse(
+        candidates=candidates,
+        comparison=comparison,
+        ai_summary=ai_summary,
+    )
+
+
+@router.post("/candidates/score", response_model=ScoreResponse)
+def score(body: ScoreRequest):
+    if not body.job_description.strip():
+        raise HTTPException(status_code=400, detail="Job description cannot be empty.")
+
+    conn = get_connection()
+    if body.candidate_ids:
+        candidates = []
+        for cid in body.candidate_ids:
+            row = conn.execute("SELECT * FROM candidates WHERE id = ?", (cid,)).fetchone()
+            if row:
+                candidates.append(_build_candidate(row))
+        conn.close()
+    else:
+        rows = conn.execute("SELECT * FROM candidates ORDER BY created_at DESC").fetchall()
+        conn.close()
+        candidates = [_build_candidate(row) for row in rows]
+
+    if not candidates:
+        return ScoreResponse(job_description=body.job_description, results=[])
+
+    candidates_info = [_candidate_info(c) for c in candidates]
+
+    try:
+        scores = score_candidates(body.job_description, candidates_info)
+    except Exception:
+        logger.exception("Scoring failed")
+        scores = {}
+
+    results = []
+    for c in candidates:
+        s = scores.get(str(c.id), {})
+        results.append(
+            CandidateScore(
+                candidate=c,
+                score=int(s.get("score", 0)),
+                reasoning=s.get("reasoning", "Could not generate score."),
+                strengths=s.get("strengths", []),
+                gaps=s.get("gaps", []),
+            )
+        )
+
+    results.sort(key=lambda r: r.score, reverse=True)
+    return ScoreResponse(job_description=body.job_description, results=results)
