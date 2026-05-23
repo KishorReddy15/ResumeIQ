@@ -8,7 +8,7 @@ const SOURCE_COLORS = {
   Other: "bg-gray-50 text-gray-600 ring-gray-500/10",
 };
 
-export default function CandidateCard({ candidate, onUpdate }) {
+export default function CandidateCard({ candidate, onUpdate, compareSelected, onToggleCompare }) {
   const [tagInput, setTagInput] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -57,7 +57,11 @@ export default function CandidateCard({ candidate, onUpdate }) {
   const sourceColor = SOURCE_COLORS[candidate.source] || SOURCE_COLORS.Other;
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-200/80 p-5 hover:shadow-lg hover:shadow-gray-100/80 hover:border-gray-300/60 transition-all duration-200 group">
+    <div className={`bg-white rounded-2xl border p-5 hover:shadow-lg hover:shadow-gray-100/80 transition-all duration-200 group ${
+      compareSelected
+        ? "border-indigo-400 ring-2 ring-indigo-100"
+        : "border-gray-200/80 hover:border-gray-300/60"
+    }`}>
       <div className="flex justify-between items-start mb-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white font-semibold text-sm shadow-sm">
@@ -72,9 +76,24 @@ export default function CandidateCard({ candidate, onUpdate }) {
             </span>
           </div>
         </div>
-        <span className="text-[11px] text-gray-400 bg-gray-50 px-2 py-0.5 rounded-md max-w-[120px] truncate" title={candidate.filename}>
-          {candidate.filename}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-gray-400 bg-gray-50 px-2 py-0.5 rounded-md max-w-[120px] truncate" title={candidate.filename}>
+            {candidate.filename}
+          </span>
+          <button
+            onClick={() => onToggleCompare(candidate.id)}
+            title={compareSelected ? "Remove from comparison" : "Add to comparison"}
+            className={`p-1.5 rounded-lg transition-colors ${
+              compareSelected
+                ? "bg-indigo-100 text-indigo-600"
+                : "bg-gray-50 text-gray-400 hover:bg-indigo-50 hover:text-indigo-500"
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       <div className="space-y-1 text-sm text-gray-600 mb-4">

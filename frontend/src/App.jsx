@@ -5,6 +5,8 @@ import CandidateCard from "./components/CandidateCard";
 import ChatAssistant from "./components/ChatAssistant";
 import FilterBar from "./components/FilterBar";
 import NLSearchBar from "./components/NLSearchBar";
+import CompareModal from "./components/CompareModal";
+import ScoringPanel from "./components/ScoringPanel";
 
 const EMPTY_FILTERS = { source: [], skill: [], tag: [], search: "" };
 
@@ -13,6 +15,8 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("candidates");
   const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [compareIds, setCompareIds] = useState([]);
+  const [showCompare, setShowCompare] = useState(false);
   const debounceRef = useRef(null);
 
   const fetchCandidates = useCallback((f) => {
@@ -114,7 +118,31 @@ function App() {
           <>
             <UploadZone onUploaded={handleUploaded} />
             <NLSearchBar onUpdate={handleUpdate} />
+            <ScoringPanel candidates={candidates} />
             <FilterBar filters={filters} onChange={handleFilterChange} />
+
+            {compareIds.length >= 2 && (
+              <div className="mb-4 flex items-center gap-3 p-3 bg-indigo-50 rounded-xl border border-indigo-200/60">
+                <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+                </svg>
+                <span className="text-sm text-indigo-700 font-medium">
+                  {compareIds.length} candidate{compareIds.length !== 1 && "s"} selected
+                </span>
+                <button
+                  onClick={() => setShowCompare(true)}
+                  className="ml-auto px-3 py-1.5 text-sm font-medium text-white bg-indigo-500 rounded-lg hover:bg-indigo-600 transition-colors"
+                >
+                  Compare Now
+                </button>
+                <button
+                  onClick={() => setCompareIds([])}
+                  className="px-3 py-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-800 transition-colors"
+                >
+                  Clear
+                </button>
+              </div>
+            )}
 
             {loading ? (
               <div className="flex flex-col items-center justify-center py-16 text-gray-400">
@@ -139,6 +167,16 @@ function App() {
                     key={c.id}
                     candidate={c}
                     onUpdate={handleUpdate}
+                    compareSelected={compareIds.includes(c.id)}
+                    onToggleCompare={(id) => {
+                      setCompareIds((prev) =>
+                        prev.includes(id)
+                          ? prev.filter((x) => x !== id)
+                          : prev.length < 4
+                            ? [...prev, id]
+                            : prev,
+                      );
+                    }}
                   />
                 ))}
               </div>
@@ -148,6 +186,14 @@ function App() {
           <ChatAssistant />
         )}
       </main>
+
+      {showCompare && compareIds.length >= 2 && (
+        <CompareModal
+          candidateIds={compareIds}
+          candidates={candidates}
+          onClose={() => setShowCompare(false)}
+        />
+      )}
     </div>
   );
 }
