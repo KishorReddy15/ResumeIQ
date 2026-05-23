@@ -4,6 +4,7 @@ import UploadZone from "./components/UploadZone";
 import CandidateCard from "./components/CandidateCard";
 import ChatAssistant from "./components/ChatAssistant";
 import FilterBar from "./components/FilterBar";
+import NLSearchBar from "./components/NLSearchBar";
 
 const EMPTY_FILTERS = { source: [], skill: [], tag: [], search: "" };
 
@@ -92,6 +93,7 @@ function App() {
         {tab === "candidates" ? (
           <>
             <UploadZone onUploaded={handleUploaded} />
+            <NLSearchBar onUpdate={handleUpdate} />
             <FilterBar filters={filters} onChange={handleFilterChange} />
 
             {loading ? (

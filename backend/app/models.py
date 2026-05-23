@@ -59,3 +59,18 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     reply: str
+
+
+class NLSearchRequest(BaseModel):
+    query: str
+
+
+class NLCandidateResult(BaseModel):
+    candidate: CandidateOut
+    explanation: str
+
+
+class NLSearchResponse(BaseModel):
+    query: str
+    sql: str
+    results: list[NLCandidateResult]
