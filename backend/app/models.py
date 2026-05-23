@@ -45,3 +45,17 @@ class UploadResponse(BaseModel):
     id: int
     filename: str
     candidate: CandidateOut
+
+
+class ChatMessage(BaseModel):
+    role: str  # "user" or "assistant"
+    content: str
+
+
+class ChatRequest(BaseModel):
+    messages: list[ChatMessage]
+    resume_texts: list[str] = []
+
+
+class ChatResponse(BaseModel):
+    reply: str

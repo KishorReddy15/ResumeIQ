@@ -1,8 +1,11 @@
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from .database import get_connection
-from .models import CandidateOut, ExperienceItem, EducationItem, TagUpdate, UploadResponse
-from .services import extract_text_from_pdf, extract_resume_data, validate_pdf
+from .models import (
+    CandidateOut, ExperienceItem, EducationItem, TagUpdate, UploadResponse,
+    ChatRequest, ChatResponse,
+)
+from .services import extract_text_from_pdf, extract_resume_data, validate_pdf, chat_with_resumes
 
 router = APIRouter()
 
@@ -138,3 +141,41 @@ def update_tags(candidate_id: int, body: TagUpdate):
     row = conn.execute("SELECT * FROM candidates WHERE id = ?", (candidate_id,)).fetchone()
     conn.close()
     return _build_candidate(row)
+
+
+@router.post("/chat/upload")
+async def chat_upload(files: list[UploadFile] = File(...)):
+    texts = []
+    filenames = []
+    for f in files:
+        error = validate_pdf(f.filename or "", f.size or 0)
+        if error:
+            raise HTTPException(status_code=400, detail=f"{f.filename}: {error}")
+
+        pdf_bytes = await f.read()
+        if not pdf_bytes:
+            raise HTTPException(status_code=400, detail=f"{f.filename}: Empty file.")
+
+        text = extract_text_from_pdf(pdf_bytes)
+        if not text:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{f.filename}: Could not extract text from PDF.",
+            )
+        texts.append(text)
+        filenames.append(f.filename or "unknown.pdf")
+
+    return {"resume_texts": texts, "filenames": filenames}
+
+
+@router.post("/chat", response_model=ChatResponse)
+def chat(body: ChatRequest):
+    if not body.resume_texts:
+        raise HTTPException(
+            status_code=400,
+            detail="No resume texts provided. Upload resumes first.",
+        )
+
+    messages = [{"role": m.role, "content": m.content} for m in body.messages]
+    reply = chat_with_resumes(body.resume_texts, messages)
+    return ChatResponse(reply=reply)
