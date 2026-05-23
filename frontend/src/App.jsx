@@ -1,21 +1,43 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import api from "./api";
 import UploadZone from "./components/UploadZone";
 import CandidateCard from "./components/CandidateCard";
 import ChatAssistant from "./components/ChatAssistant";
+import FilterBar from "./components/FilterBar";
+
+const EMPTY_FILTERS = { source: [], skill: [], tag: [], search: "" };
 
 function App() {
   const [candidates, setCandidates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("candidates");
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const debounceRef = useRef(null);
 
-  useEffect(() => {
+  const fetchCandidates = useCallback((f) => {
+    const params = new URLSearchParams();
+    f.source.forEach((s) => params.append("source", s));
+    f.skill.forEach((s) => params.append("skill", s));
+    f.tag.forEach((t) => params.append("tag", t));
+    if (f.search) params.append("search", f.search);
+    const qs = params.toString();
+
     api
-      .get("/candidates")
+      .get(`/candidates${qs ? `?${qs}` : ""}`)
       .then((res) => setCandidates(res.data))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    fetchCandidates(EMPTY_FILTERS);
+  }, [fetchCandidates]);
+
+  const handleFilterChange = (next) => {
+    setFilters(next);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => fetchCandidates(next), 300);
+  };
 
   const handleUploaded = (candidate) => {
     setCandidates((prev) => [candidate, ...prev]);
@@ -70,6 +92,7 @@ function App() {
         {tab === "candidates" ? (
           <>
             <UploadZone onUploaded={handleUploaded} />
+            <FilterBar filters={filters} onChange={handleFilterChange} />
 
             {loading ? (
               <p className="text-center text-gray-400">Loading candidates...</p>
