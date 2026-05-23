@@ -70,11 +70,10 @@ export default function FilterBar({ filters, onChange }) {
 
   return (
     <div className="mb-6">
-      {/* Search + toggle row */}
-      <div className="flex items-center gap-3 mb-2">
+      <div className="flex items-center gap-2 mb-2">
         <div className="relative flex-1">
           <svg
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
+            className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -88,19 +87,19 @@ export default function FilterBar({ filters, onChange }) {
           </svg>
           <input
             type="text"
-            placeholder="Search candidates by name, email, skill, or company..."
+            placeholder="Search by name, email, skill, or company..."
             value={filters.search}
             onChange={(e) => onChange({ ...filters, search: e.target.value })}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent bg-white shadow-sm placeholder-gray-400 transition-shadow hover:shadow-md"
           />
         </div>
 
         <button
           onClick={() => setOpen(!open)}
-          className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${
+          className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium rounded-xl border transition-all duration-200 shadow-sm ${
             open || activeCount > 0
-              ? "bg-indigo-50 text-indigo-600 border-indigo-200"
-              : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
+              ? "bg-indigo-50 text-indigo-600 border-indigo-200 shadow-indigo-100/50"
+              : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:shadow-md"
           }`}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -113,7 +112,7 @@ export default function FilterBar({ filters, onChange }) {
           </svg>
           Filters
           {activeCount > 0 && (
-            <span className="bg-indigo-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+            <span className="bg-indigo-600 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center shadow-sm">
               {activeCount}
             </span>
           )}
@@ -122,19 +121,23 @@ export default function FilterBar({ filters, onChange }) {
         {activeCount > 0 && (
           <button
             onClick={clearAll}
-            className="text-sm text-gray-500 hover:text-red-500 transition-colors"
+            className="text-xs font-medium text-gray-400 hover:text-red-500 transition-colors flex items-center gap-1"
           >
-            Clear all
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            Clear
           </button>
         )}
       </div>
 
-      {/* Filter panel */}
       {open && (
-        <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm space-y-4">
-          {/* Source */}
+        <div className="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-sm space-y-5 mt-1">
           <div>
-            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+              <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m9.86-6.072a4.5 4.5 0 00-6.364 0L4.34 10.783a4.5 4.5 0 006.364 6.364l1.757-1.757" />
+              </svg>
               Source
             </h4>
             <div className="flex flex-wrap gap-2">
@@ -142,10 +145,10 @@ export default function FilterBar({ filters, onChange }) {
                 <button
                   key={src}
                   onClick={() => toggleSource(src)}
-                  className={`px-3 py-1 text-sm rounded-full border transition-colors ${
+                  className={`px-3.5 py-1.5 text-sm rounded-xl border transition-all duration-150 ${
                     filters.source.includes(src)
-                      ? "bg-indigo-100 text-indigo-700 border-indigo-300"
-                      : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
+                      ? "bg-indigo-100 text-indigo-700 border-indigo-300 font-medium shadow-sm"
+                      : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100 hover:border-gray-300"
                   }`}
                 >
                   {src}
@@ -154,22 +157,24 @@ export default function FilterBar({ filters, onChange }) {
             </div>
           </div>
 
-          {/* Skills */}
           <div>
-            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+              <svg className="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+              </svg>
               Skills
             </h4>
             {filters.skill.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mb-2">
+              <div className="flex flex-wrap gap-1.5 mb-2.5">
                 {filters.skill.map((s) => (
                   <span
                     key={s}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full"
+                    className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-indigo-50 text-indigo-700 text-xs rounded-lg font-medium ring-1 ring-inset ring-indigo-600/10"
                   >
                     {s}
                     <button
                       onClick={() => removeSkill(s)}
-                      className="hover:text-blue-900"
+                      className="hover:text-red-500 transition-colors"
                     >
                       &times;
                     </button>
@@ -189,15 +194,15 @@ export default function FilterBar({ filters, onChange }) {
                     addSkill(skillInput);
                   }
                 }}
-                className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent bg-gray-50/50 placeholder-gray-400"
               />
               {skillInput && filteredSkillOptions.length > 0 && (
-                <ul className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-32 overflow-y-auto">
+                <ul className="absolute z-10 mt-1.5 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-32 overflow-y-auto">
                   {filteredSkillOptions.slice(0, 8).map((s) => (
                     <li
                       key={s}
                       onClick={() => addSkill(s)}
-                      className="px-3 py-1.5 text-sm hover:bg-indigo-50 cursor-pointer"
+                      className="px-3.5 py-2 text-sm hover:bg-indigo-50 cursor-pointer first:rounded-t-xl last:rounded-b-xl transition-colors"
                     >
                       {s}
                     </li>
@@ -207,22 +212,25 @@ export default function FilterBar({ filters, onChange }) {
             </div>
           </div>
 
-          {/* Tags */}
           <div>
-            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+              <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
+              </svg>
               Tags
             </h4>
             {filters.tag.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mb-2">
+              <div className="flex flex-wrap gap-1.5 mb-2.5">
                 {filters.tag.map((t) => (
                   <span
                     key={t}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full"
+                    className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-50 text-emerald-700 text-xs rounded-lg font-medium ring-1 ring-inset ring-emerald-600/10"
                   >
                     {t}
                     <button
                       onClick={() => removeTag(t)}
-                      className="hover:text-green-900"
+                      className="hover:text-red-500 transition-colors"
                     >
                       &times;
                     </button>
@@ -242,15 +250,15 @@ export default function FilterBar({ filters, onChange }) {
                     addTag(tagInput);
                   }
                 }}
-                className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent bg-gray-50/50 placeholder-gray-400"
               />
               {tagInput && filteredTagOptions.length > 0 && (
-                <ul className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-32 overflow-y-auto">
+                <ul className="absolute z-10 mt-1.5 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-32 overflow-y-auto">
                   {filteredTagOptions.slice(0, 8).map((t) => (
                     <li
                       key={t}
                       onClick={() => addTag(t)}
-                      className="px-3 py-1.5 text-sm hover:bg-indigo-50 cursor-pointer"
+                      className="px-3.5 py-2 text-sm hover:bg-indigo-50 cursor-pointer first:rounded-t-xl last:rounded-b-xl transition-colors"
                     >
                       {t}
                     </li>
@@ -262,16 +270,15 @@ export default function FilterBar({ filters, onChange }) {
         </div>
       )}
 
-      {/* Active filter pills (shown when panel is closed) */}
       {!open && activeCount > 0 && (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-1.5 mt-1">
           {filters.source.map((s) => (
             <span
               key={`src-${s}`}
-              className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 text-indigo-700 text-xs rounded-full"
+              className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-indigo-50 text-indigo-700 text-xs rounded-lg font-medium ring-1 ring-inset ring-indigo-600/10"
             >
               {s}
-              <button onClick={() => toggleSource(s)} className="hover:text-indigo-900">
+              <button onClick={() => toggleSource(s)} className="hover:text-red-500 transition-colors">
                 &times;
               </button>
             </span>
@@ -279,10 +286,10 @@ export default function FilterBar({ filters, onChange }) {
           {filters.skill.map((s) => (
             <span
               key={`skill-${s}`}
-              className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full"
+              className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-lg font-medium ring-1 ring-inset ring-blue-600/10"
             >
               {s}
-              <button onClick={() => removeSkill(s)} className="hover:text-blue-900">
+              <button onClick={() => removeSkill(s)} className="hover:text-red-500 transition-colors">
                 &times;
               </button>
             </span>
@@ -290,10 +297,10 @@ export default function FilterBar({ filters, onChange }) {
           {filters.tag.map((t) => (
             <span
               key={`tag-${t}`}
-              className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full"
+              className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-50 text-emerald-700 text-xs rounded-lg font-medium ring-1 ring-inset ring-emerald-600/10"
             >
               {t}
-              <button onClick={() => removeTag(t)} className="hover:text-green-900">
+              <button onClick={() => removeTag(t)} className="hover:text-red-500 transition-colors">
                 &times;
               </button>
             </span>
