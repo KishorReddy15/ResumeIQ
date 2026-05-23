@@ -1,4 +1,4 @@
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 
 from .database import get_connection
 from .models import (
@@ -106,11 +106,64 @@ async def upload_resume(
 
 
 @router.get("/candidates", response_model=list[CandidateOut])
-def list_candidates():
+def list_candidates(
+    source: list[str] = Query(default=[]),
+    skill: list[str] = Query(default=[]),
+    tag: list[str] = Query(default=[]),
+    search: str = Query(default=""),
+):
     conn = get_connection()
-    rows = conn.execute("SELECT * FROM candidates ORDER BY created_at DESC").fetchall()
+    clauses: list[str] = []
+    params: list[str] = []
+
+    if source:
+        placeholders = ",".join("?" for _ in source)
+        clauses.append(f"c.source IN ({placeholders})")
+        params.extend(source)
+
+    if skill:
+        for s in skill:
+            clauses.append(
+                "c.id IN (SELECT candidate_id FROM skills WHERE LOWER(skill) LIKE ?)"
+            )
+            params.append(f"%{s.lower()}%")
+
+    if tag:
+        for t in tag:
+            clauses.append(
+                "c.id IN (SELECT candidate_id FROM tags WHERE LOWER(tag) LIKE ?)"
+            )
+            params.append(f"%{t.lower()}%")
+
+    if search:
+        term = f"%{search.lower()}%"
+        clauses.append(
+            "(LOWER(c.name) LIKE ? OR LOWER(c.email) LIKE ? "
+            "OR c.id IN (SELECT candidate_id FROM skills WHERE LOWER(skill) LIKE ?) "
+            "OR c.id IN (SELECT candidate_id FROM experience WHERE LOWER(title) LIKE ? OR LOWER(company) LIKE ?))"
+        )
+        params.extend([term, term, term, term, term])
+
+    where = ""
+    if clauses:
+        where = "WHERE " + " AND ".join(clauses)
+
+    rows = conn.execute(
+        f"SELECT c.* FROM candidates c {where} ORDER BY c.created_at DESC",
+        params,
+    ).fetchall()
     conn.close()
     return [_build_candidate(row) for row in rows]
+
+
+@router.get("/candidates/filters")
+def get_filter_options():
+    conn = get_connection()
+    sources = [r["source"] for r in conn.execute("SELECT DISTINCT source FROM candidates ORDER BY source").fetchall()]
+    skills = [r["skill"] for r in conn.execute("SELECT DISTINCT skill FROM skills ORDER BY skill").fetchall()]
+    tags = [r["tag"] for r in conn.execute("SELECT DISTINCT tag FROM tags ORDER BY tag").fetchall()]
+    conn.close()
+    return {"sources": sources, "skills": skills, "tags": tags}
 
 
 @router.get("/candidates/{candidate_id}", response_model=CandidateOut)
