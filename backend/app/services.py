@@ -91,6 +91,42 @@ def extract_resume_data(raw_text: str) -> ExtractedResume:
     return ExtractedResume(**data)
 
 
+CHAT_SYSTEM_PROMPT = """You are ResumeIQ Chat Assistant — an expert recruiter AI that helps users analyze resumes. You have been given the text content of one or more resumes uploaded by the user. Use this context to answer their questions accurately.
+
+When answering:
+- Reference specific details from the resumes (names, skills, experience, education).
+- If comparing multiple resumes, be structured and clear.
+- If the user asks something not covered by the resumes, say so honestly.
+- Be concise but thorough.
+
+Resume content provided below:
+"""
+
+
+def chat_with_resumes(resume_texts: list[str], messages: list[dict]) -> str:
+    api_key = os.environ.get("GROQ_API_KEY", "")
+    if not api_key:
+        return "GROQ_API_KEY is not configured. Please set it to use the chat feature."
+
+    context = CHAT_SYSTEM_PROMPT
+    for i, text in enumerate(resume_texts, 1):
+        context += f"\n--- Resume {i} ---\n{text}\n"
+
+    client = Groq(api_key=api_key)
+    groq_messages = [{"role": "system", "content": context}]
+    for msg in messages:
+        groq_messages.append({"role": msg["role"], "content": msg["content"]})
+
+    response = client.chat.completions.create(
+        model="llama-3.1-8b-instant",
+        messages=groq_messages,
+        temperature=0.3,
+        max_tokens=2048,
+    )
+
+    return response.choices[0].message.content.strip()
+
+
 def validate_pdf(filename: str, size: int) -> str | None:
     if not filename.lower().endswith(".pdf"):
         return "Only PDF files are accepted."
