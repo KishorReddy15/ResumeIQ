@@ -1,3 +1,5 @@
+import os
+import logging
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 
 from .database import get_connection
@@ -5,7 +7,13 @@ from .models import (
     CandidateOut, ExperienceItem, EducationItem, TagUpdate, UploadResponse,
     ChatRequest, ChatResponse,
 )
-from .services import extract_text_from_pdf, extract_resume_data, validate_pdf, chat_with_resumes
+from .services import (
+    extract_text_from_pdf, extract_resume_data, validate_pdf,
+    chat_with_resumes, filter_candidates_with_llm,
+)
+
+logger = logging.getLogger(__name__)
+
 
 router = APIRouter()
 
@@ -51,6 +59,7 @@ def _build_candidate(row: dict) -> CandidateOut:
         education=education,
         tags=tags,
         created_at=row["created_at"],
+        raw_text=row["raw_text"],
     )
 
 
@@ -105,6 +114,27 @@ async def upload_resume(
     return UploadResponse(id=candidate_id, filename=file.filename or "", candidate=candidate)
 
 
+def _filter_candidates_by_keywords(candidates: list[CandidateOut], search: str) -> list[CandidateOut]:
+    term = search.lower()
+    filtered = []
+    for c in candidates:
+        name_match = term in (c.name or "").lower()
+        email_match = term in (c.email or "").lower()
+        skill_match = any(term in s.lower() for s in c.skills)
+        exp_match = any(
+            term in (exp.title or "").lower() or term in (exp.company or "").lower() or term in (exp.description or "").lower()
+            for exp in c.experience
+        )
+        edu_match = any(
+            term in (edu.degree or "").lower() or term in (edu.institution or "").lower()
+            for edu in c.education
+        )
+        raw_match = term in (c.raw_text or "").lower()
+        if name_match or email_match or skill_match or exp_match or edu_match or raw_match:
+            filtered.append(c)
+    return filtered
+
+
 @router.get("/candidates", response_model=list[CandidateOut])
 def list_candidates(
     source: list[str] = Query(default=[]),
@@ -135,15 +165,6 @@ def list_candidates(
             )
             params.append(f"%{t.lower()}%")
 
-    if search:
-        term = f"%{search.lower()}%"
-        clauses.append(
-            "(LOWER(c.name) LIKE ? OR LOWER(c.email) LIKE ? "
-            "OR c.id IN (SELECT candidate_id FROM skills WHERE LOWER(skill) LIKE ?) "
-            "OR c.id IN (SELECT candidate_id FROM experience WHERE LOWER(title) LIKE ? OR LOWER(company) LIKE ?))"
-        )
-        params.extend([term, term, term, term, term])
-
     where = ""
     if clauses:
         where = "WHERE " + " AND ".join(clauses)
@@ -153,7 +174,22 @@ def list_candidates(
         params,
     ).fetchall()
     conn.close()
-    return [_build_candidate(row) for row in rows]
+
+    candidates = [_build_candidate(row) for row in rows]
+
+    if search:
+        api_key = os.environ.get("GROQ_API_KEY", "")
+        if api_key and candidates:
+            try:
+                matching_ids = filter_candidates_with_llm(candidates, search)
+                candidates = [c for c in candidates if c.id in matching_ids]
+            except Exception as e:
+                logger.exception("Error filtering candidates with LLM. Falling back to keyword search.")
+                candidates = _filter_candidates_by_keywords(candidates, search)
+        elif candidates:
+            candidates = _filter_candidates_by_keywords(candidates, search)
+
+    return candidates
 
 
 @router.get("/candidates/filters")

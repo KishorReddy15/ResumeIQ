@@ -1,0 +1,13 @@
+ResumeIQ/
+├── backend/
+│   └── app/
+│       ├── main.py       # FastAPI application entry point & CORS setup
+│       ├── database.py   # SQLite database schema, connections, and initialization
+│       ├── models.py     # Pydantic schemas for request/response serialization
+│       ├── routes.py     # API routing, business logic orchestration, and fallbacks
+│       └── services.py   # PDF text extraction and all LLM helper services (Groq)
+├── frontend/
+│   └── src/
+│       ├── App.jsx       # React main state container & tab routing
+│       ├── api.js        # Axios instance configured to point to backend
+│       └── components/   # UI components (UploadZone, FilterBar, ChatAssistant, etc.)

@@ -35,6 +35,7 @@ class CandidateOut(BaseModel):
     education: list[EducationItem] = []
     tags: list[str] = []
     created_at: str | None = None
+    raw_text: str | None = None
 
 
 class TagUpdate(BaseModel):
