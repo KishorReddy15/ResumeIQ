@@ -7,6 +7,7 @@ from .database import init_db
 from .routes import router
 
 
+# This starts the main page, where the previous data persists on screen i.e previously uploaded resumes are visible on screen
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
